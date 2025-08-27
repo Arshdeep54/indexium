@@ -1,14 +1,21 @@
+use core::fmt;
+
 pub const DEGREE: i32 = 3;
 pub const MIN_ITEMS: i32 = DEGREE - 1;
 pub const MAX_ITEMS: i32 = DEGREE * 2;
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Item {
     pub key: i32,
     pub val: String,
 }
+impl fmt::Display for Item {
+        fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result{
+            write!(f,"{}-{}",self.key,self.val)
+        }
+}
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Node {
     items: Vec<Item>,
     children: Vec<Box<Node>>,
@@ -16,6 +23,11 @@ pub struct Node {
     num_children: i32,
 }
 
+impl fmt::Display for Node {
+        fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result{
+             self.fmt_with_indent(f, 0)
+        }
+}
 impl Node {
     pub fn new() -> Self {
         Node {
@@ -24,6 +36,26 @@ impl Node {
             num_items: 0,
             num_children: 0,
         }
+    }
+
+    fn fmt_with_indent(&self, f:&mut fmt::Formatter<'_>, indent:usize) -> fmt::Result{
+        for _ in 0..indent{
+            write!(f,"  ")?;
+        }
+        write!(f,"[")?;
+        for(i,item) in self.items.iter().enumerate(){
+            if i>0 {
+                write!(f,", ")?;
+            }
+            write!(f,"{:?}",item)?;
+        }
+        write!(f, "]")?;
+
+        for child in &self.children{
+            child.fmt_with_indent(f,indent+1)?;
+        }
+
+        Ok(())
     }
     fn is_leaf(&self) -> bool {
         self.num_children == 0
@@ -114,10 +146,19 @@ impl Node {
         self.children[pos as usize].insert(item);
     }
 }
+#[derive(Debug)]
 pub struct Btree {
     pub root: Option<Box<Node>>,
 }
 
+impl fmt::Display for Btree{
+    fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result{
+        match &self.root{
+            Some(node) => write!(f,"{}" ,node),
+            None=> write!(f, "<empty tree>"),
+        }
+    }
+}
 impl Btree {
     pub fn new() -> Self {
         Btree {

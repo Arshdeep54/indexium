@@ -1,54 +1,49 @@
-use btree::{Btree, Item};
+use std::{fs, path::PathBuf};
 
+use btree::Btree;
+// use btree::{Btree, Item};
+use input_handler::InputHandler;
+use parsing::parse_command;
 mod btree;
+mod parsing;
+pub struct IndexSession {
+    btree:Btree,
+}
+impl IndexSession {
+    fn new()->Self{
+        IndexSession { btree: Btree::new() }
+    }
+    
+}
 fn main() {
-    let item = Item {
-        key: 3,
-        val: "Hey its 3".to_string(),
-    };
-    let mut btree = Btree::new();
-    btree.insert(item);
-    btree.insert(Item {
-        key: 4,
-        val: "hey its 4".to_string(),
-    });
-    btree.insert(Item {
-        key: 5,
-        val: "hey its 5".to_string(),
-    });
-    btree.insert(Item {
-        key: 6,
-        val: "hey its 6".to_string(),
-    });
-    btree.insert(Item {
-        key: 7,
-        val: "hey its 7".to_string(),
-    });
-    btree.insert(Item {
-        key: 8,
-        val: "hey its 8".to_string(),
-    });
-    btree.insert(Item {
-        key: 9,
-        val: "hey its 9".to_string(),
-    });
-    btree.insert(Item {
-        key: 10,
-        val: "hey its 10".to_string(),
-    });
-    btree.insert(Item {
-        key: 11,
-        val: "hey its 11".to_string(),
-    });
+    let mut index_session=IndexSession::new();
 
-    match btree.search(8) {
-        Ok(val) => println!("{val}"),
-        Err(_) => println!("Key not found"),
+    let data_dir = PathBuf::from("data");
+    if !data_dir.exists() {
+        fs::create_dir(&data_dir).expect("Failed to create data directory");
     }
+    let history_file = data_dir.join("history.txt");
 
-    if let Some(ref root_node) = btree.root {
-        println!("No of items in root: {:?}", root_node.num_items);
-    } else {
-        println!("The root node is empty.");
+    let mut input_handler =
+        InputHandler::with_history_file(history_file).expect("Failed to initialize input handler");
+
+    while let Ok(line) = input_handler.readline("indexium> ") {
+        if line.eq_ignore_ascii_case("exit") {
+            break;
+        }
+        parse_command(&mut index_session,&line);
     }
+    // let mut btree = Btree::new();
+    // match args.index_kind.as_str() {
+    //     "BTREE" => match args.index_func.as_str() {
+    //         "INSERT" => {
+    //             btree.insert(Item { key: args.key, val: args.value });
+    //             println!("{:?}",btree);
+    //         }
+    //         _ => {}
+    //     },
+    //     _ => {}
+    // }
+    
+
 }
