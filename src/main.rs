@@ -12,7 +12,7 @@ pub struct IndexSession {
 impl IndexSession {
     fn new() -> Self {
         IndexSession {
-            btree: Btree::new(),
+            btree: Btree::new("data/btree.snap", 4096).expect("Failed to create Btree"),
         }
     }
 }
