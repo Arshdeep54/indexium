@@ -7,7 +7,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub struct Node {
-    id: PageID,
+    pub id: PageID,
     pub items: Vec<Item>,
     #[allow(clippy::vec_box)]
     pub children: Vec<Box<Node>>,
@@ -111,7 +111,7 @@ impl Node {
         Ok((mid_item, new_node))
     }
 
-    pub fn insert(&mut self, item: Item,pager:&mut Pager) {
+    pub fn insert(&mut self, item: Item, pager: &mut Pager) {
         let (mut pos, found) = self.search(item.key);
         if found {
             println!("Key already exist");
@@ -137,7 +137,7 @@ impl Node {
                 return;
             }
         }
-        self.children[pos as usize].insert(item,pager);
+        self.children[pos as usize].insert(item, pager);
     }
 }
 
@@ -159,13 +159,13 @@ impl Node {
         }
     }
 
-    pub fn _from_page(page: Page) -> Self {
+    pub fn from_page(page: &Page) -> Self {
         match page {
             Page::Leaf { id, items } => {
                 let num_items = items.len() as i32;
                 Node {
-                    id,
-                    items,
+                    id: *id,
+                    items: items.clone(),
                     children: vec![],
                     num_items,
                     num_children: 0,
@@ -177,9 +177,9 @@ impl Node {
                 children: child_ids,
             } => {
                 let items: Vec<Item> = keys
-                    .into_iter()
+                    .iter()
                     .map(|k| Item {
-                        key: k,
+                        key: *k,
                         val: String::new(),
                     })
                     .collect();
@@ -188,7 +188,7 @@ impl Node {
                 let num_children = child_ids.len() as i32;
 
                 Node {
-                    id,
+                    id: *id,
                     items,
                     children: Vec::new(),
                     num_items,

@@ -1,6 +1,6 @@
 use core::fmt;
 use node::Node;
-use paging::Pager;
+use paging::{Page, Pager};
 use std::io::{self, Result};
 mod node;
 mod paging;
@@ -35,12 +35,21 @@ impl fmt::Display for Btree {
 }
 impl Btree {
     pub fn new(filename: &str, page_size: usize) -> Result<Self> {
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(filename)?;
+        let file_exists = std::path::Path::new(filename).exists();
+
+        let file = if file_exists {
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(filename)?
+        } else {
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(filename)?
+        };
 
         Ok(Btree {
             pager: Pager {
@@ -117,13 +126,44 @@ impl Btree {
         println!("Deleting {key}")
     }
     pub fn snapshot(&mut self) -> Result<()> {
+        if self.root.is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Cannot snapshot empty tree",
+            ));
+        }
+
         if let Some(root) = self.root.clone() {
             self.snapshot_node(&root)?;
         }
+
+        self.pager.file.sync_all()?;
+
         Ok(())
     }
+
     fn snapshot_node(&mut self, node: &Node) -> std::io::Result<()> {
         let page = node.to_page();
+
+        match &page {
+            Page::Internal { keys, children, .. } => {
+                if keys.len() + 1 != children.len() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Invalid internal node: keys + 1 != children",
+                    ));
+                }
+            }
+            Page::Leaf { items, .. } => {
+                if items.is_empty() && !self.root.as_ref().map(|r| r.id == node.id).unwrap_or(false)
+                {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Invalid leaf node: empty items",
+                    ));
+                }
+            }
+        }
 
         self.pager.write_page(&page)?;
 
@@ -134,5 +174,115 @@ impl Btree {
         }
 
         Ok(())
+    }
+
+    pub fn load_snapshot(filename: &str, page_size: usize) -> Result<Self> {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(filename)?;
+
+        let metadata = file.metadata()?;
+        if metadata.len() == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Cannot load snapshot from empty file",
+            ));
+        }
+
+        let num_pages = (metadata.len() / page_size as u64) as u32;
+        if num_pages == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "File size too small for valid snapshot",
+            ));
+        }
+
+        let mut pager = Pager {
+            file,
+            page_size,
+            num_pages,
+        };
+
+        let root_page = match pager.read_page(0) {
+            Ok(page) => page,
+            Err(e) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Failed to read root page: {e}"),
+                ));
+            }
+        };
+
+        let root_node = match Self::load_node(&mut pager, &root_page) {
+            Ok(node) => node,
+            Err(e) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Failed to load root node: {e}"),
+                ));
+            }
+        };
+
+        if root_node.num_items < 0 || root_node.num_items > MAX_ITEMS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid root node: invalid item count {}",
+                    root_node.num_items
+                ),
+            ));
+        }
+
+        Ok(Btree {
+            pager,
+            root: Some(Box::new(root_node)),
+        })
+    }
+
+    fn load_node(pager: &mut Pager, page: &Page) -> std::io::Result<Node> {
+        let mut node = Node::from_page(page);
+
+        if let Page::Internal { children, .. } = page {
+            let mut loaded_children = Vec::new();
+            for &child_page_id in children {
+                if child_page_id >= pager.num_pages {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Invalid child page ID: {child_page_id}"),
+                    ));
+                }
+                let child_page = pager.read_page(child_page_id)?;
+                let child_node = Self::load_node(pager, &child_page)?;
+                loaded_children.push(Box::new(child_node));
+            }
+            node.children = loaded_children;
+        }
+
+        Ok(node)
+    }
+
+    pub fn is_valid_snapshot(filename: &str, page_size: usize) -> bool {
+        let file = match std::fs::OpenOptions::new().read(true).open(filename) {
+            Ok(file) => file,
+            Err(_) => return false,
+        };
+
+        let metadata = match file.metadata() {
+            Ok(meta) => meta,
+            Err(_) => return false,
+        };
+
+        if metadata.len() < page_size as u64 {
+            return false;
+        }
+
+        let mut pager = Pager {
+            file,
+            page_size,
+            num_pages: 0,
+        };
+
+        pager.read_page(0).is_ok()
     }
 }

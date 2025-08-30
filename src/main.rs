@@ -1,7 +1,6 @@
 use std::{fs, path::PathBuf};
 
 use btree::Btree;
-// use btree::{Btree, Item};
 use input_handler::InputHandler;
 use parsing::parse_command;
 mod btree;
@@ -11,9 +10,22 @@ pub struct IndexSession {
 }
 impl IndexSession {
     fn new() -> Self {
-        IndexSession {
-            btree: Btree::new("data/btree.snap", 4096).expect("Failed to create Btree"),
-        }
+        let filename = "data/btree.snap";
+        let page_size = 4096;
+
+        let btree =
+            if PathBuf::from(filename).exists() && Btree::is_valid_snapshot(filename, page_size) {
+                match Btree::load_snapshot(filename, page_size) {
+                    Ok(bt) => bt,
+                    Err(e) => {
+                        eprintln!("Failed to load snapshot: {e}. Creating new B-tree.");
+                        Btree::new(filename, page_size).expect("Failed to create Btree")
+                    }
+                }
+            } else {
+                Btree::new(filename, page_size).expect("Failed to create Btree")
+            };
+        IndexSession { btree }
     }
 }
 fn main() {
