@@ -4,29 +4,30 @@ pub const DEGREE: i32 = 3;
 pub const MIN_ITEMS: i32 = DEGREE - 1;
 pub const MAX_ITEMS: i32 = DEGREE * 2;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Item {
     pub key: i32,
     pub val: String,
 }
 impl fmt::Display for Item {
-        fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result{
-            write!(f,"{}-{}",self.key,self.val)
-        }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}-{}", self.key, self.val)
+    }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Node {
     items: Vec<Item>,
+    #[allow(clippy::vec_box)]
     children: Vec<Box<Node>>,
     pub num_items: i32,
     num_children: i32,
 }
 
 impl fmt::Display for Node {
-        fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result{
-             self.fmt_with_indent(f, 0)
-        }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with_indent(f, 0)
+    }
 }
 impl Node {
     pub fn new() -> Self {
@@ -38,21 +39,21 @@ impl Node {
         }
     }
 
-    fn fmt_with_indent(&self, f:&mut fmt::Formatter<'_>, indent:usize) -> fmt::Result{
-        for _ in 0..indent{
-            write!(f,"  ")?;
+    fn fmt_with_indent(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
+        for _ in 0..indent {
+            write!(f, "  ")?;
         }
-        write!(f,"[")?;
-        for(i,item) in self.items.iter().enumerate(){
-            if i>0 {
-                write!(f,", ")?;
+        write!(f, "[")?;
+        for (i, item) in self.items.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
             }
-            write!(f,"{:?}",item)?;
+            write!(f, "{item}")?;
         }
         write!(f, "]")?;
 
-        for child in &self.children{
-            child.fmt_with_indent(f,indent+1)?;
+        for child in &self.children {
+            child.fmt_with_indent(f, indent + 1)?;
         }
 
         Ok(())
@@ -151,23 +152,21 @@ pub struct Btree {
     pub root: Option<Box<Node>>,
 }
 
-impl fmt::Display for Btree{
-    fn fmt(&self,f:&mut fmt::Formatter<'_>)->fmt::Result{
-        match &self.root{
-            Some(node) => write!(f,"{}" ,node),
-            None=> write!(f, "<empty tree>"),
+impl fmt::Display for Btree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.root {
+            Some(node) => write!(f, "{node}"),
+            None => write!(f, "<empty tree>"),
         }
     }
 }
 impl Btree {
     pub fn new() -> Self {
-        Btree {
-            root: None,
-        }
+        Btree { root: None }
     }
 
     pub fn insert(&mut self, item: Item) {
-        println!("Inserting {:?}",item.key);
+        println!("Inserting {:?}", item.key);
         if self.root.is_none() {
             self.root = Some(Box::new(Node::new()));
         }
@@ -178,7 +177,7 @@ impl Btree {
         };
 
         if root_is_full {
-            println!("Root is full {:?}",self.root.clone().unwrap().num_items);
+            println!("Root is full {:?}", self.root.clone().unwrap().num_items);
             self.split_root();
         }
 
@@ -200,7 +199,10 @@ impl Btree {
         new_root.insert_child_at(1, new_node);
         self.root = Some(Box::new(new_root));
 
-        println!("Root split. New num_items {:?}",self.root.clone().unwrap().num_items);
+        println!(
+            "Root split. New num_items {:?}",
+            self.root.clone().unwrap().num_items
+        );
     }
 
     pub fn search(&self, key: i32) -> Result<String, String> {
@@ -221,5 +223,8 @@ impl Btree {
         }
 
         Err("Key not found".to_string())
+    }
+    pub fn delete(&mut self, key: i32) {
+        println!("Deleting {key}")
     }
 }

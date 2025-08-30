@@ -7,16 +7,17 @@ use parsing::parse_command;
 mod btree;
 mod parsing;
 pub struct IndexSession {
-    btree:Btree,
+    btree: Btree,
 }
 impl IndexSession {
-    fn new()->Self{
-        IndexSession { btree: Btree::new() }
+    fn new() -> Self {
+        IndexSession {
+            btree: Btree::new(),
+        }
     }
-    
 }
 fn main() {
-    let mut index_session=IndexSession::new();
+    let mut index_session = IndexSession::new();
 
     let data_dir = PathBuf::from("data");
     if !data_dir.exists() {
@@ -31,19 +32,6 @@ fn main() {
         if line.eq_ignore_ascii_case("exit") {
             break;
         }
-        parse_command(&mut index_session,&line);
+        parse_command(&mut index_session, &line);
     }
-    // let mut btree = Btree::new();
-    // match args.index_kind.as_str() {
-    //     "BTREE" => match args.index_func.as_str() {
-    //         "INSERT" => {
-    //             btree.insert(Item { key: args.key, val: args.value });
-    //             println!("{:?}",btree);
-    //         }
-    //         _ => {}
-    //     },
-    //     _ => {}
-    // }
-    
-
 }

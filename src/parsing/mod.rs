@@ -23,31 +23,31 @@ where
             index_type: tokens[0].to_string(),
             index_function: tokens[1].to_string(),
             key: tokens[2].parse().ok().unwrap(),
-            value
+            value,
         }
     }
 }
 pub fn parse_command(index_session: &mut IndexSession, command: &str) {
     let trimmed_command = command.trim();
-    println!("Command: {}", trimmed_command);
+    println!("Command: {trimmed_command}");
     let cmd: Command<i32, String> = Command::new(command);
-    match cmd.index_type.as_str() {
-        "BTREE" => match cmd.index_function.as_str() {
+    if cmd.index_type.as_str() == "BTREE" || cmd.index_type.as_str() == "btree" {
+        match cmd.index_function.as_str() {
             "INSERT" | "insert" => {
                 index_session.btree.insert(Item {
                     key: cmd.key,
                     val: cmd.value.clone().unwrap(),
                 });
-                println!("{:?}",index_session.btree);
+                println!("{:?}", index_session.btree);
             }
-            "SEARCH" | "search" => {
-                match index_session.btree.search(cmd.key){
-                    Ok(val)=>println!("Value {:?}",val),
-                    Err(_)=> println!("Key not found")
-                }
+            "SEARCH" | "search" => match index_session.btree.search(cmd.key) {
+                Ok(val) => println!("Value {val}"),
+                Err(_) => println!("Key not found"),
+            },
+            "DELETE" | "delete" => {
+                index_session.btree.delete(cmd.key);
             }
             _ => {}
-        },
-        _ => {}
+        }
     }
 }
