@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 input_handler = "0.1"
+tempfile = "3.21.0"

@@ -1,7 +1,9 @@
 use core::fmt;
+use metadata::BtreeMetadata;
 use node::Node;
 use paging::{Page, Pager};
 use std::io::{self, Result};
+mod metadata;
 mod node;
 mod paging;
 pub const DEGREE: i32 = 3;
@@ -89,10 +91,15 @@ impl Btree {
             .take()
             .expect("Called split_root on an empty tree.");
 
+        let new_root_id = self.pager.allocate_page().unwrap();
+        let mut new_root = Node::new(new_root_id);
+
         let (mid_item, new_node) = old_root.split(&mut self.pager).unwrap();
-        let id = self.pager.allocate_page().unwrap();
-        let mut new_root = Node::new(id);
-        new_root.insert_item_at(0, mid_item);
+        let nav_item = Item {
+            key: mid_item.key,
+            val: String::new(), // Internal nodes don't store values
+        };
+        new_root.insert_item_at(0, nav_item);
         new_root.insert_child_at(0, *old_root);
         new_root.insert_child_at(1, new_node);
         self.root = Some(Box::new(new_root));
@@ -110,8 +117,16 @@ impl Btree {
             let (pos, found) = current_node.search(key);
 
             if found {
-                let val = &current_node.items[pos as usize].val;
-                return Ok(val.clone());
+                if current_node.is_leaf() {
+                    let val = &current_node.items[pos as usize].val;
+                    return Ok(val.clone());
+                } else {
+                    current_node_opt = current_node
+                        .children
+                        .get(pos as usize + 1)
+                        .map(|boxed_node| &**boxed_node);
+                    continue;
+                }
             }
 
             current_node_opt = current_node
@@ -133,6 +148,14 @@ impl Btree {
             ));
         }
 
+        let root_page_id = self.root.as_ref().unwrap().id;
+        let metadata = BtreeMetadata::new(
+            root_page_id,
+            self.pager.page_size as u32,
+            self.pager.num_pages,
+        );
+        self.pager.write_metadata(&metadata)?;
+
         if let Some(root) = self.root.clone() {
             self.snapshot_node(&root)?;
         }
@@ -143,35 +166,13 @@ impl Btree {
     }
 
     fn snapshot_node(&mut self, node: &Node) -> std::io::Result<()> {
-        let page = node.to_page();
-
-        match &page {
-            Page::Internal { keys, children, .. } => {
-                if keys.len() + 1 != children.len() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Invalid internal node: keys + 1 != children",
-                    ));
-                }
-            }
-            Page::Leaf { items, .. } => {
-                if items.is_empty() && !self.root.as_ref().map(|r| r.id == node.id).unwrap_or(false)
-                {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Invalid leaf node: empty items",
-                    ));
-                }
-            }
-        }
-
-        self.pager.write_page(&page)?;
-
         if !node.is_leaf() {
             for child in &node.children {
                 self.snapshot_node(child)?;
             }
         }
+        let page = node.to_page();
+        self.pager.write_page(&page)?;
 
         Ok(())
     }
@@ -190,39 +191,30 @@ impl Btree {
             ));
         }
 
-        let num_pages = (metadata.len() / page_size as u64) as u32;
-        if num_pages == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "File size too small for valid snapshot",
-            ));
-        }
-
         let mut pager = Pager {
             file,
             page_size,
-            num_pages,
+            num_pages: 0,
         };
+        let metadata = pager.read_metadata()?;
 
-        let root_page = match pager.read_page(0) {
-            Ok(page) => page,
-            Err(e) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to read root page: {e}"),
-                ));
-            }
-        };
+        if metadata.page_size as usize != page_size {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "Page size mismatch: expected {}, got {}",
+                    page_size, metadata.page_size
+                ),
+            ));
+        }
+        pager.num_pages = metadata.num_pages;
 
-        let root_node = match Self::load_node(&mut pager, &root_page) {
-            Ok(node) => node,
-            Err(e) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to load root node: {e}"),
-                ));
-            }
+        let root_page = if metadata.root_page_id == 0 {
+            pager.read_page(1)?
+        } else {
+            pager.read_page(metadata.root_page_id)?
         };
+        let root_node = Self::load_node(&mut pager, &root_page)?;
 
         if root_node.num_items < 0 || root_node.num_items > MAX_ITEMS {
             return Err(io::Error::new(
@@ -246,7 +238,7 @@ impl Btree {
         if let Page::Internal { children, .. } = page {
             let mut loaded_children = Vec::new();
             for &child_page_id in children {
-                if child_page_id >= pager.num_pages {
+                if child_page_id == 0 || child_page_id > pager.num_pages {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("Invalid child page ID: {child_page_id}"),
@@ -283,6 +275,12 @@ impl Btree {
             num_pages: 0,
         };
 
-        pager.read_page(0).is_ok()
+        match pager.read_metadata() {
+            Ok(metadata) => metadata.page_size as usize == page_size,
+            Err(_) => false,
+        }
     }
 }
+
+#[cfg(test)]
+mod tests;

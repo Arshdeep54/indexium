@@ -1,4 +1,4 @@
-use super::Item;
+use super::{Item, metadata::BtreeMetadata};
 use std::{
     fs::File,
     io::{Read, Result, Seek, Write},
@@ -28,7 +28,11 @@ pub struct Pager {
 
 impl Pager {
     pub fn allocate_page(&mut self) -> std::io::Result<PageID> {
-        let new_id = self.num_pages;
+        let new_id = if self.num_pages == 0 {
+            1
+        } else {
+            self.num_pages + 1
+        };
 
         if self.page_size == 0 || self.page_size > 1024 * 1024 {
             // Max 1MB
@@ -37,17 +41,38 @@ impl Pager {
                 "Invalid page size",
             ));
         }
-        self.num_pages += 1;
 
-        self.file.seek(std::io::SeekFrom::End(0))?;
+        let offset = (new_id as u64) * (self.page_size as u64);
+        self.file.seek(std::io::SeekFrom::Start(offset))?;
+
         let write_result = self.file.write_all(&vec![0u8; self.page_size]);
 
         if write_result.is_err() {
-            self.num_pages -= 1;
-            write_result?
+            write_result?;
         }
 
+        self.num_pages = new_id;
         Ok(new_id)
+    }
+}
+
+impl Pager {
+    pub fn write_metadata(&mut self, metadata: &BtreeMetadata) -> Result<()> {
+        let data = metadata.serialize();
+
+        self.file.seek(std::io::SeekFrom::Start(0))?;
+        self.file.write_all(&data)?;
+
+        Ok(())
+    }
+
+    pub fn read_metadata(&mut self) -> Result<BtreeMetadata> {
+        let mut buf = vec![0u8; self.page_size];
+
+        self.file.seek(std::io::SeekFrom::Start(0))?;
+        self.file.read_exact(&mut buf)?;
+
+        BtreeMetadata::deserialize(&buf)
     }
 }
 

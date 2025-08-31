@@ -62,7 +62,7 @@ impl Node {
             mid = low + (high - low) / 2;
             if self.items[mid as usize].key == key {
                 return (mid, true);
-            } else if self.items[mid as usize].key > key {
+            } else if self.items[mid as usize].key < key {
                 low = mid + 1;
             } else {
                 high = mid;
@@ -75,7 +75,12 @@ impl Node {
         if pos > self.num_items || pos < 0 {
             return;
         }
-        self.items.insert(pos as usize, item);
+        let mut insert_pos = pos as usize;
+        while insert_pos < self.items.len() && self.items[insert_pos].key < item.key {
+            insert_pos += 1;
+        }
+
+        self.items.insert(insert_pos, item);
         self.num_items += 1;
     }
 
@@ -88,26 +93,28 @@ impl Node {
     }
 
     pub fn split(&mut self, pager: &mut Pager) -> Result<(Item, Node)> {
-        let mid = MIN_ITEMS;
-        let mid_item = self.items[mid as usize].clone();
         let new_id = pager.allocate_page()?;
         let mut new_node = Node::new(new_id);
-        new_node.items = self.items[mid as usize + 1..].to_vec();
-        new_node.num_items = MIN_ITEMS;
+
+        let mid = MIN_ITEMS;
+        let mid_item = self.items[mid as usize].clone();
+
+        new_node.items = self.items[mid as usize..].to_vec();
+        new_node.num_items = self.num_items - mid;
 
         if !self.is_leaf() {
             new_node.children = self.children[mid as usize + 1..].to_vec();
-            new_node.num_children = MIN_ITEMS + 1;
+            new_node.num_children = new_node.num_items + 1;
         }
 
-        if mid < self.num_items {
-            self.items.truncate(mid as usize);
-            self.num_items = mid;
+        self.items.truncate(mid as usize);
+        self.num_items = mid;
 
-            if !self.is_leaf() {
-                self.children.truncate(mid as usize + 1);
-            }
+        if !self.is_leaf() {
+            self.children.truncate(mid as usize + 1);
+            self.num_children = self.num_items + 1;
         }
+
         Ok((mid_item, new_node))
     }
 
@@ -125,7 +132,17 @@ impl Node {
 
         if self.children[pos as usize].num_items >= MAX_ITEMS {
             let (mid_item, new_node) = self.children[pos as usize].split(pager).unwrap();
-            self.insert_item_at(pos, mid_item);
+
+            if !self.is_leaf() {
+                let nav_item = Item {
+                    key: mid_item.key,
+                    val: String::new(),
+                };
+                self.insert_item_at(pos, nav_item);
+            } else {
+                self.insert_item_at(pos, mid_item);
+            }
+
             self.insert_child_at(pos + 1, new_node);
 
             let condition = item.key - self.items[pos as usize].key;
@@ -133,7 +150,6 @@ impl Node {
             } else if condition > 0 {
                 pos += 1;
             } else {
-                self.items[pos as usize] = item;
                 return;
             }
         }
@@ -183,7 +199,6 @@ impl Node {
                         val: String::new(),
                     })
                     .collect();
-
                 let num_items = items.len() as i32;
                 let num_children = child_ids.len() as i32;
 
