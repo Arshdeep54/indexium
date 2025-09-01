@@ -12,7 +12,7 @@ pub struct Node {
     #[allow(clippy::vec_box)]
     pub children: Vec<Box<Node>>,
     pub num_items: i32,
-    num_children: i32,
+    pub num_children: i32,
 }
 
 impl fmt::Display for Node {
@@ -80,7 +80,16 @@ impl Node {
             insert_pos += 1;
         }
 
-        self.items.insert(insert_pos, item);
+        let item_to_insert = if !self.is_leaf() {
+            Item {
+                key: item.key,
+                val: String::new(),
+            }
+        } else {
+            item
+        };
+
+        self.items.insert(insert_pos, item_to_insert);
         self.num_items += 1;
     }
 
@@ -154,6 +163,121 @@ impl Node {
             }
         }
         self.children[pos as usize].insert(item, pager);
+    }
+}
+
+impl Node {
+    pub fn get_predecessor(&self, pos: i32) -> Item {
+        let mut current = &self.children[pos as usize];
+        while !current.is_leaf() {
+            current = &current.children[current.num_children as usize - 1];
+        }
+        current.items[current.num_items as usize - 1].clone()
+    }
+
+    pub fn get_successor(&self, pos: i32) -> Item {
+        let mut current = &self.children[pos as usize + 1];
+        while !current.is_leaf() {
+            current = &current.children[0];
+        }
+        current.items[0].clone()
+    }
+
+    pub fn merge_children(&mut self, pos: i32) {
+        let next_child = self.children.remove(pos as usize + 1);
+
+        let child = &mut self.children[pos as usize];
+
+        let separator = self.items.remove(pos as usize);
+
+        let original_items = child.items.clone();
+
+        child.items.clear();
+
+        let mut all_items = Vec::new();
+        all_items.extend(original_items);
+        all_items.extend(next_child.items);
+        all_items.push(separator);
+
+        all_items.sort_by_key(|item| item.key);
+        child.items = all_items;
+
+        child.children.extend(next_child.children);
+
+        child.num_items = child.items.len() as i32;
+        child.num_children = child.children.len() as i32;
+        self.num_items -= 1;
+        self.num_children -= 1;
+    }
+
+    pub fn borrow_from_prev(&mut self, pos: i32) {
+        let (left, right) = self.children.split_at_mut(pos as usize);
+        let sibling = &mut left[left.len() - 1];
+        let child = &mut right[0];
+
+        let sibling_item = sibling.items.pop().unwrap();
+
+        let parent_item = self.items[pos as usize - 1].clone();
+
+        self.items[pos as usize - 1] = Item {
+            key: sibling_item.key,
+            val: String::new(),
+        };
+
+        if child.is_leaf() {
+            child.items.insert(0, sibling_item);
+        } else {
+            child.items.insert(0, parent_item);
+        }
+
+        if !sibling.is_leaf() {
+            if let Some(last_child) = sibling.children.pop() {
+                child.children.insert(0, last_child);
+            }
+        }
+        sibling.num_items -= 1;
+        child.num_items += 1;
+
+        if !sibling.is_leaf() {
+            sibling.num_children = sibling.children.len() as i32;
+            child.num_children = child.children.len() as i32;
+        }
+    }
+
+    pub fn borrow_from_next(&mut self, pos: i32) {
+        let (left, right) = self.children.split_at_mut(pos as usize + 1);
+        let child = &mut left[left.len() - 1];
+        let sibling = &mut right[0];
+
+        let sibling_item = sibling.items.remove(0);
+
+        let parent_item = self.items[pos as usize].clone();
+
+        self.items[pos as usize] = Item {
+            key: sibling_item.key,
+            val: String::new(),
+        };
+
+        if child.is_leaf() {
+            child.items.push(sibling_item);
+        } else {
+            child.items.push(parent_item);
+        }
+
+        if !sibling.is_leaf() {
+            if let Some(first_child) = sibling.children.first().cloned() {
+                child.children.push(Box::new(*first_child));
+                sibling.children.remove(0);
+            }
+        }
+
+        sibling.num_items -= 1;
+        child.num_items += 1;
+
+        if !sibling.is_leaf() {
+            sibling.num_children = sibling.children.len() as i32;
+            child.num_children = child.children.len() as i32;
+        }
     }
 }
 

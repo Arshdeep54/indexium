@@ -66,11 +66,11 @@ impl BtreeMetadata {
             ));
         }
 
-        let version = read_u32_le(&data, 4);
-        let root_page_id = read_u32_le(&data, 8);
-        let page_size = read_u32_le(&data, 12);
-        let num_pages = read_u32_le(&data, 16);
-        let created_at = read_u64_le(&data, 20);
+        let version = read_u32_le(data, 4);
+        let root_page_id = read_u32_le(data, 8);
+        let page_size = read_u32_le(data, 12);
+        let num_pages = read_u32_le(data, 16);
+        let created_at = read_u64_le(data, 20);
 
         Ok(BtreeMetadata {
             magic,

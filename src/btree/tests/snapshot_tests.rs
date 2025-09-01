@@ -76,7 +76,7 @@ fn test_snapshot_persistence() {
     for i in 0..10 {
         btree.insert(Item {
             key: i,
-            val: format!("value-{}", i),
+            val: format!("value-{i}"),
         });
     }
 
@@ -86,13 +86,13 @@ fn test_snapshot_persistence() {
 
     for i in 0..10 {
         match loaded_btree.search(i) {
-            Ok(value) => println!("Key {}: Found '{}'", i, value),
-            Err(e) => println!("Key {}: ERROR - {}", i, e),
+            Ok(value) => println!("Key {i}: Found '{value}'"),
+            Err(e) => println!("Key {i}: ERROR - {e}"),
         }
     }
 
     for i in 0..10 {
         let value = loaded_btree.search(i).unwrap();
-        assert_eq!(value, format!("value-{}", i));
+        assert_eq!(value, format!("value-{i}"));
     }
 }

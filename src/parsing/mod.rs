@@ -78,11 +78,17 @@ pub fn parse_command(index_session: &mut IndexSession, command: &str) {
                 let key = match cmd.key {
                     Some(k) => k,
                     None => {
-                        eprintln!("Error: Missing key for INSERT");
+                        eprintln!("Error: Missing key for DELETE");
                         return;
                     }
                 };
-                index_session.btree.delete(key);
+                match index_session.btree.delete(key) {
+                    Ok(_) => {
+                        println!("Successfully deleted key {key}");
+                        println!("Tree after deletion: {:?}", index_session.btree);
+                    }
+                    Err(e) => println!("Failed to delete key {key}: {e}"),
+                }
             }
             "SNAPSHOT" | "snapshot" => {
                 index_session.btree.snapshot().expect("Failed to snapshot");

@@ -137,8 +137,41 @@ impl Btree {
 
         Err(io::Error::new(io::ErrorKind::NotFound, "Key not found"))
     }
-    pub fn delete(&mut self, key: i32) {
-        println!("Deleting {key}")
+
+    pub fn delete(&mut self, key: i32) -> Result<()> {
+        if self.root.is_none() {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "Tree is empty"));
+        }
+
+        let mut root = self.root.take().unwrap();
+        let result = self.delete_recursive(&mut root, key);
+
+        if root.num_items == 0 && !root.is_leaf() {
+            self.root = Some(root.children.remove(0));
+        } else {
+            self.root = Some(root);
+        }
+
+        result
+    }
+
+    fn delete_recursive(&mut self, node: &mut Node, key: i32) -> Result<()> {
+        let (pos, found) = node.search(key);
+
+        if node.is_leaf() {
+            if found {
+                self.delete_from_leaf(node, pos)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("Key {key} not found"),
+                ))
+            }
+        } else if found {
+            self.delete_from_internal(node, pos)
+        } else {
+            self.delete_from_subtree(node, pos, key)
+        }
     }
     pub fn snapshot(&mut self) -> Result<()> {
         if self.root.is_none() {
@@ -282,5 +315,76 @@ impl Btree {
     }
 }
 
+impl Btree {
+    fn delete_from_leaf(&mut self, node: &mut Node, pos: i32) -> Result<()> {
+        let key = node.items[pos as usize].key;
+        let mut indices_to_remove = Vec::new();
+
+        for (i, item) in node.items.iter().enumerate() {
+            if item.key == key {
+                indices_to_remove.push(i);
+            }
+        }
+
+        for &index in indices_to_remove.iter().rev() {
+            node.items.remove(index);
+            node.num_items -= 1;
+        }
+
+        Ok(())
+    }
+
+    fn delete_from_internal(&mut self, node: &mut Node, pos: i32) -> Result<()> {
+        let key = node.items[pos as usize].key;
+
+        if node.children[pos as usize].num_items > MIN_ITEMS {
+            let predecessor = node.get_predecessor(pos);
+            node.items[pos as usize] = predecessor.clone();
+            self.delete_recursive(&mut node.children[pos as usize], predecessor.key)
+        } else if node.children[pos as usize + 1].num_items > MIN_ITEMS {
+            let successor = node.get_successor(pos);
+            node.items[pos as usize] = successor.clone();
+            self.delete_recursive(&mut node.children[pos as usize + 1], successor.key)
+        } else {
+            node.merge_children(pos);
+            self.delete_recursive(&mut node.children[pos as usize], key)
+        }
+    }
+
+    fn delete_from_subtree(&mut self, node: &mut Node, pos: i32, key: i32) -> Result<()> {
+        let child_has_min = node.children[pos as usize].num_items == MIN_ITEMS;
+
+        if child_has_min {
+            self.fill_child(node, pos)?;
+        }
+
+        if pos >= node.num_children {
+            self.delete_recursive(&mut node.children[pos as usize - 1], key)
+        } else {
+            let child = &node.children[pos as usize];
+            if child.num_items == 0 {
+                self.delete_recursive(&mut node.children[pos as usize + 1], key)
+            } else {
+                self.delete_recursive(&mut node.children[pos as usize], key)
+            }
+        }
+    }
+
+    fn fill_child(&mut self, node: &mut Node, pos: i32) -> Result<()> {
+        if pos > 0 && node.children[pos as usize - 1].num_items > MIN_ITEMS {
+            node.borrow_from_prev(pos)
+        } else if pos < node.num_children - 1
+            && node.children[pos as usize + 1].num_items > MIN_ITEMS
+        {
+            node.borrow_from_next(pos)
+        } else if pos > 0 {
+            node.merge_children(pos - 1)
+        } else {
+            node.merge_children(pos)
+        }
+
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests;
