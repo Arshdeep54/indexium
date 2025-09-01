@@ -80,16 +80,7 @@ impl Node {
             insert_pos += 1;
         }
 
-        let item_to_insert = if !self.is_leaf() {
-            Item {
-                key: item.key,
-                val: String::new(),
-            }
-        } else {
-            item
-        };
-
-        self.items.insert(insert_pos, item_to_insert);
+        self.items.insert(insert_pos, item);
         self.num_items += 1;
     }
 
@@ -141,17 +132,7 @@ impl Node {
 
         if self.children[pos as usize].num_items >= MAX_ITEMS {
             let (mid_item, new_node) = self.children[pos as usize].split(pager).unwrap();
-
-            if !self.is_leaf() {
-                let nav_item = Item {
-                    key: mid_item.key,
-                    val: String::new(),
-                };
-                self.insert_item_at(pos, nav_item);
-            } else {
-                self.insert_item_at(pos, mid_item);
-            }
-
+            self.insert_item_at(pos, mid_item);
             self.insert_child_at(pos + 1, new_node);
 
             let condition = item.key - self.items[pos as usize].key;
@@ -196,9 +177,8 @@ impl Node {
 
         let mut all_items = Vec::new();
         all_items.extend(original_items);
-        all_items.extend(next_child.items);
         all_items.push(separator);
-
+        all_items.extend(next_child.items);
         all_items.sort_by_key(|item| item.key);
         child.items = all_items;
 
@@ -214,27 +194,20 @@ impl Node {
         let (left, right) = self.children.split_at_mut(pos as usize);
         let sibling = &mut left[left.len() - 1];
         let child = &mut right[0];
-
         let sibling_item = sibling.items.pop().unwrap();
 
         let parent_item = self.items[pos as usize - 1].clone();
 
-        self.items[pos as usize - 1] = Item {
-            key: sibling_item.key,
-            val: String::new(),
-        };
+        self.items[pos as usize - 1] = sibling_item;
 
-        if child.is_leaf() {
-            child.items.insert(0, sibling_item);
-        } else {
-            child.items.insert(0, parent_item);
-        }
+        child.items.insert(0, parent_item);
 
         if !sibling.is_leaf() {
             if let Some(last_child) = sibling.children.pop() {
                 child.children.insert(0, last_child);
             }
         }
+
         sibling.num_items -= 1;
         child.num_items += 1;
 
@@ -253,16 +226,9 @@ impl Node {
 
         let parent_item = self.items[pos as usize].clone();
 
-        self.items[pos as usize] = Item {
-            key: sibling_item.key,
-            val: String::new(),
-        };
+        self.items[pos as usize] = sibling_item;
 
-        if child.is_leaf() {
-            child.items.push(sibling_item);
-        } else {
-            child.items.push(parent_item);
-        }
+        child.items.push(parent_item);
 
         if !sibling.is_leaf() {
             if let Some(first_child) = sibling.children.first().cloned() {
@@ -289,12 +255,10 @@ impl Node {
                 items: self.items.clone(),
             }
         } else {
-            let keys = self.items.iter().map(|it| it.key).collect();
-            let children = self.children.iter().map(|c| c.id).collect();
             Page::Internal {
                 id: self.id,
-                keys,
-                children,
+                items: self.items.clone(),
+                children: self.children.iter().map(|c| c.id).collect(),
             }
         }
     }
@@ -313,22 +277,15 @@ impl Node {
             }
             Page::Internal {
                 id,
-                keys,
-                children: child_ids,
+                items,
+                children,
             } => {
-                let items: Vec<Item> = keys
-                    .iter()
-                    .map(|k| Item {
-                        key: *k,
-                        val: String::new(),
-                    })
-                    .collect();
                 let num_items = items.len() as i32;
-                let num_children = child_ids.len() as i32;
+                let num_children = children.len() as i32;
 
                 Node {
                     id: *id,
-                    items,
+                    items: items.clone(),
                     children: Vec::new(),
                     num_items,
                     num_children,

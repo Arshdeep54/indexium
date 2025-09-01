@@ -91,15 +91,11 @@ impl Btree {
             .take()
             .expect("Called split_root on an empty tree.");
 
+        let (mid_item, new_node) = old_root.split(&mut self.pager).unwrap();
         let new_root_id = self.pager.allocate_page().unwrap();
         let mut new_root = Node::new(new_root_id);
 
-        let (mid_item, new_node) = old_root.split(&mut self.pager).unwrap();
-        let nav_item = Item {
-            key: mid_item.key,
-            val: String::new(), // Internal nodes don't store values
-        };
-        new_root.insert_item_at(0, nav_item);
+        new_root.insert_item_at(0, mid_item);
         new_root.insert_child_at(0, *old_root);
         new_root.insert_child_at(1, new_node);
         self.root = Some(Box::new(new_root));
@@ -117,16 +113,8 @@ impl Btree {
             let (pos, found) = current_node.search(key);
 
             if found {
-                if current_node.is_leaf() {
-                    let val = &current_node.items[pos as usize].val;
-                    return Ok(val.clone());
-                } else {
-                    current_node_opt = current_node
-                        .children
-                        .get(pos as usize + 1)
-                        .map(|boxed_node| &**boxed_node);
-                    continue;
-                }
+                let val = &current_node.items[pos as usize].val;
+                return Ok(val.clone());
             }
 
             current_node_opt = current_node

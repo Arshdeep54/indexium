@@ -178,3 +178,54 @@ fn test_delete_with_merge() {
     assert!(btree.search(20).is_err());
     assert_eq!(btree.search(30).unwrap(), "value-30");
 }
+
+#[test]
+fn test_internal_node_values() {
+    let (mut btree, _temp_file) = create_test_btree();
+
+    for i in 0..7 {
+        btree.insert(Item {
+            key: i,
+            val: format!("value-{i}"),
+        });
+    }
+
+    let root = btree.root.as_ref().unwrap();
+    assert!(!root.is_leaf());
+    assert_eq!(root.items[0].val, "value-2");
+    assert_eq!(btree.search(2).unwrap(), "value-2");
+}
+
+#[test]
+fn test_split_preserves_values() {
+    let (mut btree, _temp_file) = create_test_btree();
+
+    for i in 0..10 {
+        btree.insert(Item {
+            key: i,
+            val: format!("value-{i}"),
+        });
+    }
+
+    for i in 0..10 {
+        assert_eq!(btree.search(i).unwrap(), format!("value-{i}"));
+    }
+}
+
+#[test]
+fn test_merge_preserves_values() {
+    let (mut btree, _temp_file) = create_test_btree();
+
+    for i in 0..7 {
+        btree.insert(Item {
+            key: i * 10,
+            val: format!("value-{}", i * 10),
+        });
+    }
+
+    assert!(btree.delete(0).is_ok());
+    assert!(btree.delete(10).is_ok());
+
+    assert_eq!(btree.search(20).unwrap(), "value-20");
+    assert_eq!(btree.search(30).unwrap(), "value-30");
+}
