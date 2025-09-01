@@ -1,5 +1,14 @@
 # Btree Implementation
 
+# Usage 
+
+- Run `cargo run` 
+- Start filling up the btree with `BTREE insert 4 heykey4` and so on.. 
+- Search using `BTREE search 4` 
+- Delete using `BTREE delete 4`
+
+### See the live visualization of the Btree in `/tests/visualizer.md` (Use CTRL+SHIFT+V for rendering markdown)
+
 # Resouces
 
 - https://www.dataquest.io/blog/b-tree-data-structure/

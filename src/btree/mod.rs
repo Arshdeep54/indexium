@@ -6,7 +6,9 @@ use std::io::{self, Result};
 mod metadata;
 mod node;
 mod paging;
-pub const DEGREE: i32 = 3;
+pub mod utils;
+
+pub const DEGREE: i32 = 2;
 pub const MIN_ITEMS: i32 = DEGREE - 1;
 pub const MAX_ITEMS: i32 = DEGREE * 2;
 

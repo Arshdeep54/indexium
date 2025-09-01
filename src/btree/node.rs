@@ -1,7 +1,7 @@
 use std::{fmt, io::Result};
 
 use super::{
-    Item, MAX_ITEMS, MIN_ITEMS,
+    Item, MAX_ITEMS,
     paging::{Page, PageID, Pager},
 };
 
@@ -75,6 +75,8 @@ impl Node {
         if pos > self.num_items || pos < 0 {
             return;
         }
+
+        // Find the correct position to maintain sorted order
         let mut insert_pos = pos as usize;
         while insert_pos < self.items.len() && self.items[insert_pos].key < item.key {
             insert_pos += 1;
@@ -96,11 +98,11 @@ impl Node {
         let new_id = pager.allocate_page()?;
         let mut new_node = Node::new(new_id);
 
-        let mid = MIN_ITEMS;
+        let mid = self.num_items / 2;
         let mid_item = self.items[mid as usize].clone();
 
-        new_node.items = self.items[mid as usize..].to_vec();
-        new_node.num_items = self.num_items - mid;
+        new_node.items = self.items[mid as usize + 1..].to_vec();
+        new_node.num_items = self.num_items - mid - 1;
 
         if !self.is_leaf() {
             new_node.children = self.children[mid as usize + 1..].to_vec();
@@ -130,20 +132,31 @@ impl Node {
             return;
         }
 
-        if self.children[pos as usize].num_items >= MAX_ITEMS {
-            let (mid_item, new_node) = self.children[pos as usize].split(pager).unwrap();
-            self.insert_item_at(pos, mid_item);
-            self.insert_child_at(pos + 1, new_node);
+        let child_pos = if pos >= self.num_items {
+            (self.num_items) as usize
+        } else {
+            pos as usize
+        };
 
-            let condition = item.key - self.items[pos as usize].key;
-            if condition < 0 {
-            } else if condition > 0 {
-                pos += 1;
+        if self.children[child_pos].num_items >= MAX_ITEMS {
+            let (mid_item, new_node) = self.children[child_pos].split(pager).unwrap();
+            let mid_key = mid_item.key;
+            self.insert_item_at(child_pos as i32, mid_item);
+            self.insert_child_at(child_pos as i32 + 1, new_node);
+
+            if item.key > mid_key {
+                pos = child_pos as i32 + 1;
             } else {
-                return;
+                pos = child_pos as i32;
             }
         }
-        self.children[pos as usize].insert(item, pager);
+
+        let child_pos = if pos >= self.num_items {
+            (self.num_items) as usize
+        } else {
+            pos as usize
+        };
+        self.children[child_pos].insert(item, pager);
     }
 }
 
